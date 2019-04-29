@@ -160,7 +160,7 @@ def handle_dialog(req, res):
                     res['response']['text'] = 'Верно,  я задумала число  %s.  Сделано ходов - %s. %s' % (
                         str(sessiondiap[user_id]['tis']), str(sessiondiap[user_id]['stepI']), s_victoria )
                 else:
-                    res['response']['text'] = '%s, к сожалению, ОШИБКА!  Я задумала число  %s.  Победила Алиса.' % (
+                    res['response']['text'] = '%s, к сожалению, ОШИБКА!  Я задумала число  %s.  Победила Алиса.  Игра окончена.' % (
                         sessionStorage[user_id]['first_name'].title(), str(sessiondiap[user_id]['tis']) )
                 res['response']['end_session'] = True
         else:
