@@ -1,9 +1,10 @@
-# импортируем библиотеки
+﻿# импортируем библиотеки
 from flask import Flask, request
 import logging
 import random
 
 import json
+#from test import get_first_name
 
 app = Flask(__name__)
 
@@ -26,8 +27,8 @@ def main():
         }
     }
 
-    # Отправляем request.json и response в функцию handle_dialog. Она сформирует оставшиеся поля JSON, которые отвечают
-    # непосредственно за ведение диалога
+    # Отправляем request.json и response в функцию handle_dialog. Она сформирует оставшиеся поля JSON,
+    # которые отвечают  непосредственно за ведение диалога
     handle_dialog(request.json, response)
 
     logging.info('Response: %r', request.json)
@@ -39,41 +40,15 @@ def main():
 def handle_dialog(req, res):
     user_id = req['session']['user_id']
 
-    if req['session']['new']:
-        # Это новый пользователь.
-        # Инициализируем сессию и поприветствуем его.
-        # Запишем подсказки, которые мы ему покажем в первый раз
+    if req['session']['new']:        # Это новый пользователь.
+        # Инициализируем сессию и поприветствуем Пользователя.
 
-        sessionStorage[user_id] = {
-            'suggests': [
-                "Число загадано.",
-                "Не хочу играть.",
-                "Отстань!"
-            ],
-            'first_name': None,
-            'yes_no' : [
-                "Да",
-                "Нет"
-            ]
-        }
-        # создаём словарь, диапазона чисел
-        sessiondiap[user_id] = {
-            'start':  1,
-            'end':    100,
-            'tis':    0,
-            'step':   0,
-            'itis':   50,
-            'znak':   '',
-            'regim':  '0',
-            'stepAlisa': 0,
-            'stepI':   0
-            }
+        Init_start_game(user_id)     # заполним словари начальными данными
         res['response']['text'] = 'Привет! Я - Алиса.  Назови свое имя.'
         return
 
     # если пользователь не новый, то попадаем сюда.
-    # если поле имени пустое, то это говорит о том,
-    # что пользователь ещё не представился.
+    # если поле имени пустое, значит, пользователь ещё не представился.
     if sessionStorage[user_id]['first_name'] is None:
         # в последнем его сообщение ищем имя.
         first_name = get_first_name(req)
@@ -83,26 +58,31 @@ def handle_dialog(req, res):
                 'Не расслышала имя. Повтори, пожалуйста!'
 
         # если нашли, то приветствуем пользователя.
-        # И спрашиваем какой город он хочет увидеть.
+        # и предлагаем поиграть.
         else:
             sessionStorage[user_id]['first_name'] = first_name
             res['response'][
                 'text'] = 'Приятно познакомиться!     ' + first_name.title()\
                           + ',   загадай число от 1 до 100, а я попробую его отгадать.'
-            sessiondiap[user_id]['regim'] = 'загадай' #111111111111111
             res['response']['buttons'] = get_suggests(user_id, sessiondiap[user_id]['regim'])
-
+            # устанавливаем режим 'загадай' - Пользователь загадывает число
+            sessiondiap[user_id]['regim'] = 'загадай'
         return
 
+
     if sessiondiap[user_id]['regim'] == 'загадай':
-        if 'загада' in req['request']['original_utterance'].lower():
-            sessiondiap[user_id]['regim'] = 'игра'
+        if 'загада'  in req['request']['original_utterance'].lower() and\
+            not 'не' in req['request']['original_utterance'].lower():
+            # пользователь согласился играть и загадал число
+            # показываем первый вопрос
             sessiondiap[user_id]['znak'] = '>'
             res['response']['text'] = 'Тогда начнем.    Задуманное число > %s ?' % (
                 sessiondiap[user_id]['itis'])
             res['response']['buttons'] = get_yes_no(user_id)
-
+            # устанавливаем режим 'игра' - Алиса начала отгадывать число
+            sessiondiap[user_id]['regim'] = 'игра'
         else:
+            # Пользователь отказался от игры
             res['response']['text'] = 'Хорошо.  Поиграем в другой раз...  Пока!'
             res['response']['end_session'] = True
         return
@@ -113,14 +93,17 @@ def handle_dialog(req, res):
             (но не больше одного условия в вопросе)' % (
                 sessionStorage[user_id]['first_name'].title())
         res['response']['buttons'] = get_suggests(user_id, sessiondiap[user_id]['regim'])
+        #  !!! Алиса загадала число
         sessiondiap[user_id]['tis'] = random.randint(1, 100)
         sessiondiap[user_id]['regim'] = 'игра2'
         return
 
     if sessiondiap[user_id]['regim'] == 'игра2':
+        # Пользователь начал отгадывать число
         st = read_otvet3(user_id, req['request']['original_utterance'].lower())
         if st == 'ok':
-#           случайным образом строим ответ: "на вопрос" или "на твой вопрос"
+            # сюда попадаем если вопрос пользователя понятен
+            # случайным образом строим ответ: "на вопрос" или "на твой вопрос"
             sp_ask = ['На вопрос', 'На твой вопрос']
             isp = random.randint(0, len(sp_ask)-1)
 
@@ -167,56 +150,28 @@ def handle_dialog(req, res):
             res['response']['text'] = 'Не поняла твой вопрос  "%s". Ошибка: %s.\
                 Пожалуйста, спроси еще раз!' % (req['request']['original_utterance'], st)
 
-#        res['response']['text'] = '%s, otvet = %' % (
-#                sessionStorage[user_id]['first_name'].title(), req['request']['original_utterance'].lower())
-#        res['response']['buttons'] = get_suggests(user_id, sessiondiap[user_id]['regim'])
         sessiondiap[user_id]['regim'] = 'игра2'
         return
 
-    # сюда попадаем когда начата игра
-    sp = ['Задуманное число', 'Загаданное число', 'Твоё число', 'Число']
+    # сюда попадаем когда начата игра - режим: игра
     st = get_otvet(user_id, req['request']['original_utterance'].lower())
     if st == 'да' or st == 'нет':
         change_diap(user_id, st)
         if find_chislo(user_id):
             res['response']['text'] = '%s, я уже  знаю твое число!  Было задумано число = %s.\
-            (мне потребовалось ходов = %s).  Продолжим?' % (
+                (мне потребовалось ходов = %s).  Продолжим?' % (
                 sessionStorage[user_id]['first_name'].title(), sessiondiap[user_id]['tis'], sessiondiap[user_id]['step'])
             res['response']['buttons'] = get_yes_no(user_id)
-            # для перехода в режим, когда пользователь отгадывает число regim = 'загадай2'
+            # для перехода в режим, когда Пользователь отгадывает число устанавливаем regim = 'загадай2'
             sessiondiap[user_id]['regim'] = 'загадай2'
             return
         else:
-            zn = random.randint(0, 1)
-            isp = random.randint(0, len(sp)-1)
-
-            put_name = random.randint(0, 1)
-            if put_name == 1:  #перед вопросом вывести имя
-                str0 = sessionStorage[user_id]['first_name'].title() + ', ' + sp[isp].lower()
-            else:
-                str0 = sp[isp]
-
-            if sessiondiap[user_id]['end'] - sessiondiap[user_id]['start'] == 1:
-                zn = 0
-                sessiondiap[user_id]['itis'] = sessiondiap[user_id]['end']
-                sessiondiap[user_id]['znak'] = '<'
-            if zn == 1:
-                res['response']['text'] = '%s > %s ?' % (
-                str0, sessiondiap[user_id]['itis']) #, sessiondiap[user_id]['start'], sessiondiap[user_id]['end'])
- #               res['response']['text'] = '%s число  > %s?' % (
- #               sp[isp], sessiondiap[user_id]['itis'])
-                sessiondiap[user_id]['znak'] = '>'
-            else:
-                res['response']['text'] = '%s  < %s  ?' % (
-                str0, sessiondiap[user_id]['itis']) #, sessiondiap[user_id]['start'], sessiondiap[user_id]['end'])
-#                res['response']['text'] = '%s число  < %s ?' % (
-#                sp[isp], sessiondiap[user_id]['itis'])
-                sessiondiap[user_id]['znak'] = '<'
+            # сюда попадаем, если Алиса еще не отгадала число
+            res['response']['text'] = get_Alisa_question(user_id)
             res['response']['buttons'] = get_yes_no(user_id)
-#        req['request']['original_utterance'])
     else:
-        res['response']['text'] = 'Не поняла твой ответ  "%s".  Пожалуйста, ответь еще раз!%s' % (
-            req['request']['original_utterance'], sessiondiap[user_id]['regim'])
+        res['response']['text'] = 'Не поняла твой ответ  "%s".  Пожалуйста, ответь еще раз!' % (
+            req['request']['original_utterance']) #, sessiondiap[user_id]['regim'])
 #    res['response']['buttons'] = get_suggests(user_id)
 
 
@@ -376,18 +331,84 @@ def get_suggests(user_id, regim):
 
     return suggests
 
+#==================================================================
+# в последнем сообщении  ищем имя Пользователя
 def get_first_name(req):
     # перебираем сущности
     for entity in req['request']['nlu']['entities']:
         # находим сущность с типом 'YANDEX.FIO'
         if entity['type'] == 'YANDEX.FIO':
-            # Если есть сущность с ключом 'first_name',
-            # то возвращаем ее значение.
+            # Если есть сущность с ключом 'first_name', то возвращаем ее значение.
             # Во всех остальных случаях возвращаем None.
             return entity['value'].get('first_name', None)
 
+#==================================================================
+# Инициируем начало игры
+# заполним словари стартовыми данными
+
+def Init_start_game(user_id):
+
+    # Запишем подсказки, которые мы  покажем Пользователю в первый раз
+    sessionStorage[user_id] = {
+        'suggests': [
+            "Число загадано.",
+            "Не хочу играть.",
+            "Отстань!"
+            ],
+        'first_name': None,
+        'yes_no' : [
+            "Да",
+            "Нет"
+            ]
+        }
+
+    # создаём и заполняем словарь, диапазона чисел
+    sessiondiap[user_id] = {
+        'start':  1,        # начало диапазона
+        'end':    100,      # конец диапазона
+        'itis':   50,       # середина диапазона (end + start)\2
+        'tis':    0,        # здесь число отгаданное Алисой или число, которое Алиса загадала
+        'step':   0,        # номер хода (уточняющего вопроса) Алисы
+        'stepI':  0,        # номер хода (уточняющего вопроса) Пользователя
+        'znak':   '',       # знак в последнем заданном вопросе > или < или =
+        'regim':  ''        # режим игры: начальное значение  '', затем по ходу игры меняется
+                            # 'загадай' - пользователь загадывает число
+                            # 'игра'    - Алиса  отгадывает число, задуманное Пользователем
+                            # 'загадай2'- Алиса загадывает число
+                            # 'игра2'   - Пользователь отгадывает число, задуманное Алисой
+        }
 
 
+#===========================================================================
+# формируем случайным способом вопрос Алисы, для поиска числа в строке str0
+
+def get_Alisa_question(user_id):
+    sp = ['Задуманное число', 'Загаданное число', 'Твоё число', 'Число']
+
+    # чтобы диалог был разнообразнее случайлым образом формируем вопрос в str0
+    isp = random.randint(0, len(sp)-1)  # случайный выбор части вопроса
+    zn = random.randint(0, 1)           # случайный выбор знака сравнения в вопроса
+
+    put_name = random.randint(0, 1)
+    if put_name == 1:  #перед вопросом вывести имя
+        str0 = sessionStorage[user_id]['first_name'].title() + ', ' + sp[isp].lower()
+    else:
+        str0 = sp[isp]
+
+    if sessiondiap[user_id]['end'] - sessiondiap[user_id]['start'] == 1:
+        # когда для выбора осталось 2 числа
+        zn = 0
+        sessiondiap[user_id]['itis'] = sessiondiap[user_id]['end']
+        sessiondiap[user_id]['znak'] = '<'
+    if zn == 1:
+        sessiondiap[user_id]['znak'] = '>'
+        str0 = str0 + ' > ' + str(sessiondiap[user_id]['itis'])
+
+    else:
+        sessiondiap[user_id]['znak'] = '<'
+        str0 = str0 + ' < ' + str(sessiondiap[user_id]['itis'])
+
+    return(str0)
 
 
 if __name__ == '__main__':
