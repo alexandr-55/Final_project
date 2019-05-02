@@ -1,4 +1,4 @@
-﻿# импортируем библиотеки
+# импортируем библиотеки
 from flask import Flask, request
 import logging
 import random
@@ -69,7 +69,6 @@ def handle_dialog(req, res):
             sessiondiap[user_id]['regim'] = 'загадай'
         return
 
-
     if sessiondiap[user_id]['regim'] == 'загадай':
         if 'загада'  in req['request']['original_utterance'].lower() and\
             not 'не' in req['request']['original_utterance'].lower():
@@ -100,56 +99,23 @@ def handle_dialog(req, res):
 
     if sessiondiap[user_id]['regim'] == 'игра2':
         # Пользователь начал отгадывать число
-        st = read_otvet3(user_id, req['request']['original_utterance'].lower())
+        # проанализируем его вопрос
+        st = get_User_question(user_id, req['request']['original_utterance'].lower())
         if st == 'ok':
             # сюда попадаем если вопрос пользователя понятен
-            # случайным образом строим ответ: "на вопрос" или "на твой вопрос"
-            sp_ask = ['На вопрос', 'На твой вопрос']
-            isp = random.randint(0, len(sp_ask)-1)
+            # случайным образом строим ответ Алисы: "на вопрос" или "на твой вопрос"
 
-            put_name = random.randint(0, 1)
-            if put_name == 1:  #перед вопросом вывести имя
-                str0 = sessionStorage[user_id]['first_name'].title() + ', ' + sp_ask[isp].lower()
-            else:
-                str0 = sp_ask[isp]
+            if sessiondiap[user_id]['znak'] != '=':   # Пользователь еще ищет число
 
-            sessiondiap[user_id]['stepI'] += 1
-            if sessiondiap[user_id]['znak'] == '>':
-                str_uslovie = '> ' + str(sessiondiap[user_id]['itis'])
-                if sessiondiap[user_id]['tis'] > sessiondiap[user_id]['itis']:
-                    res['response']['text'] = '%s "%s"?   Отвечаю -  ДА' % (
-                        str0, str_uslovie)
-                else:
-                    res['response']['text'] = '%s "%s"?   Отвечаю -  НЕТ' % (
-                        str0, str_uslovie)
+                res['response']['text'] = create_Alisa_answer(user_id)
 
-            elif sessiondiap[user_id]['znak'] == '<':
-                str_uslovie = '< ' + str(sessiondiap[user_id]['itis'])
-                if sessiondiap[user_id]['tis'] < sessiondiap[user_id]['itis']:
-                    res['response']['text'] = '%s "%s"?   Отвечаю -  ДА' % (
-                        str0, str_uslovie)
-                else:
-                    res['response']['text'] = '%s "%s"?   Отвечаю -  НЕТ' % (
-                        str0, str_uslovie)
-
-            elif sessiondiap[user_id]['znak'] == '=':
-                if sessiondiap[user_id]['tis'] == sessiondiap[user_id]['itis']:
-                    if sessiondiap[user_id]['step'] == sessiondiap[user_id]['stepI']:
-                        s_victoria = ' Итоги игры: НИЧЬЯ - число ходов одинаковое (по ' + str(sessiondiap[user_id]['step']) + ')'
-                    elif sessiondiap[user_id]['step'] < sessiondiap[user_id]['stepI']:
-                        s_victoria = ' Итоги игры: Победа АЛИСЫ (я потратила меньше ходов - ' + str(sessiondiap[user_id]['step']) + ')'
-                    else:
-                        s_victoria = ' Итоги игры: Твоя победа!!! (я потратила больше ходов - ' + str(sessiondiap[user_id]['step']) + ')'
-                    res['response']['text'] = 'Верно,  я задумала число  %s.  Сделано ходов - %s. %s' % (
-                        str(sessiondiap[user_id]['tis']), str(sessiondiap[user_id]['stepI']), s_victoria )
-                else:
-                    res['response']['text'] = '%s, к сожалению, ОШИБКА!  Я задумала число  %s.  Победила Алиса.  Игра окончена.' % (
-                        sessionStorage[user_id]['first_name'].title(), str(sessiondiap[user_id]['tis']) )
+            elif sessiondiap[user_id]['znak'] == '=':   # Пользователь назвал число
+                # если отгадал, то определим кто победил
+                res['response']['text'] = Itog_game(user_id)
                 res['response']['end_session'] = True
         else:
             res['response']['text'] = 'Не поняла твой вопрос  "%s". Ошибка: %s.\
                 Пожалуйста, спроси еще раз!' % (req['request']['original_utterance'], st)
-
         sessiondiap[user_id]['regim'] = 'игра2'
         return
 
@@ -172,24 +138,89 @@ def handle_dialog(req, res):
     else:
         res['response']['text'] = 'Не поняла твой ответ  "%s".  Пожалуйста, ответь еще раз!' % (
             req['request']['original_utterance']) #, sessiondiap[user_id]['regim'])
-#    res['response']['buttons'] = get_suggests(user_id)
 
 
-# по вопросу пользователя распознать число и знак сравнения >\<\=
-def read_otvet3(user_id, sss):
+#===================================================================
+# Если Пользователь назвал правильно число, то определить победителя
+# по кол-ву сделанных ходов
+def Itog_game(user_id):
+
+    if sessiondiap[user_id]['tis'] == sessiondiap[user_id]['itis']:
+        svictory = 'Верно,  я задумала число ' + str(sessiondiap[user_id]['tis']) + \
+                    ' Сделано ходов - ' + str(sessiondiap[user_id]['stepI']) + '. '
+        if sessiondiap[user_id]['step'] == sessiondiap[user_id]['stepI']:
+            itog = ' Итоги игры: НИЧЬЯ - число ходов одинаковое (по ' + str(sessiondiap[user_id]['step']) + ')'
+        elif sessiondiap[user_id]['step'] < sessiondiap[user_id]['stepI']:
+            itog = ' Итоги игры: Победа АЛИСЫ (я потратила меньше ходов - ' + str(sessiondiap[user_id]['step']) + ')'
+        else:
+            itog = ' Итоги игры: Твоя победа!!! (я потратила больше ходов - ' + str(sessiondiap[user_id]['step']) + ')'
+        return(svictory + itog)
+
+    else:
+        itog = sessionStorage[user_id]['first_name'].title() + ', к сожалению, ОШИБКА!  \
+               Я задумала число  '+ str(sessiondiap[user_id]['tis']) + \
+               '.  Победила Алиса.  Игра окончена.'
+        return(itog)
+
+#=================================================================
+# создать ответ Алисы на запрос пользователя
+# для разнообразия диалога случайным образом строим ответ Алисы
+# в str0
+def create_Alisa_answer(user_id):
+    sp_ask = ['На вопрос', 'На твой вопрос']
+    isp = random.randint(0, len(sp_ask))
+
+    put_name = random.randint(0, 1)
+    if put_name == 1:  # перед ответом  вывести имя
+        str0 = sessionStorage[user_id]['first_name'].title() + ', ' + sp_ask[isp].lower()
+    else:
+        str0 = sp_ask[isp]
+
+    if sessiondiap[user_id]['znak'] == '>':
+        str0 = str0 + ' > ' + str(sessiondiap[user_id]['itis'])
+        if sessiondiap[user_id]['tis'] > sessiondiap[user_id]['itis']:
+            return(str0 + '?   Отвечаю -  ДА')
+        else:
+            return(str0 + '?   Отвечаю -  НЕТ')
+
+    elif sessiondiap[user_id]['znak'] == '<':
+        str0 = str0 + ' < ' + str(sessiondiap[user_id]['itis'])
+        if sessiondiap[user_id]['tis'] < sessiondiap[user_id]['itis']:
+            return(str0 + '?   Отвечаю -  ДА')
+        else:
+            return(str0 + '?   Отвечаю -  НЕТ')
+    else:
+        return('')
+
+
+
+#=================================================================
+# по вопросу Пользователя распознать число и знак сравнения >\<\=
+# вернуть:
+#   ошибку, которая помешала Алисе понять вопрос
+#   или  'ok' - если все верно, тогда из вопроса заполнить
+#               sessiondiap[user_id]['znak'] и  sessiondiap[user_id]['itis']
+#
+def get_User_question(user_id, sss):
+    sp_not = ['не хочу', 'надоело', 'отстань', 'позже', 'в другой раз', 'потом', 'выхо']
     s0 = ''
     sp = [ '<', 'меньше', '>', 'больше', '=', 'равно']
+
     mi = [ -1, -1, -1, -1, -1, -1]
     ni = -1
 
+#    for i in range(sp_not
     sessiondiap[user_id]['znak'] = ''
+    # убираем из вопроса Пользователя все пробелы и знак ?
     for i in range(len(sss)):
         if sss[i] == ' ' or sss[i] == '?':
             pass
         else:
            s0 += sss[i]
 
-    #искать в ответе знаки сравнения и считать их кол-во в  n_find
+    # проанализируем введенный вопрос
+
+    # искать в ответе знаки сравнения и считать их кол-во в  n_find
     n_find = 0
     for i in range(len(sp)):
         pred = mi[i]
@@ -204,12 +235,12 @@ def read_otvet3(user_id, sss):
                 ni = i
 
     if n_find > 1:
-        return "Нельзя использовать несколько условий в вопросе"
+        return('Нельзя использовать несколько условий в вопросе')
 
     n = 0
-    if n_find == 0:  # в ответе не было знака,если ответ начинается с цифра, то считаем знак =
+    if n_find == 0:  # в ответе не было знака, если ответ начинается с цифра, то считаем знак =
         if not s0[0].isdigit():
-            return("В вопросе нет знака сравнения < или > или =")
+            return('В вопросе нет знака сравнения < или > или =')
 
         sessiondiap[user_id]['znak'] = '='
 #        i = 0
@@ -217,14 +248,14 @@ def read_otvet3(user_id, sss):
 #            if s0[i].isdigit():
 #                break;
 #        if not s0[i].isdigit():
-#            return 'В ответе нет числа'
+#            return('В вопросе нет числа')
         # находим число
         i = 0
         while i < len(s0) and s0[i].isdigit():
             n = n * 10 + int(s0[i])
             i += 1
 
-    elif n_find == 1:
+    elif n_find == 1:  # в вопросе нашли один знак сравнения
         i = mi[ni]
         # находим число
         while i < len(s0) and s0[i].isdigit():
@@ -239,6 +270,7 @@ def read_otvet3(user_id, sss):
     return 'ok'
 
 
+#=====================================================================
 # получить ответ от пользователя -  больше или меньше число того что в вопросе Алисы
 def get_otvet(user_id, st):
 
@@ -259,7 +291,9 @@ def get_otvet(user_id, st):
 
     return st0
 
+#===================================================================================================
 # реализация алгоритма поиска числа методом половинного деления диапазона
+#
 def change_diap(user_id, st):
     if sessiondiap[user_id]['znak'] == '>' and st == 'да':
         sessiondiap[user_id]['start'] = sessiondiap[user_id]['itis'] + 1
@@ -277,6 +311,8 @@ def change_diap(user_id, st):
     sessiondiap[user_id]['step'] = sessiondiap[user_id]['step'] + 1
 
 
+#===========================================================================
+# возврашает True, если число отгадоно   иначе - False
 def find_chislo(user_id):
     if sessiondiap[user_id]['end'] - sessiondiap[user_id]['start'] <= 0:
         if sessiondiap[user_id]['znak'] == '>':
@@ -288,7 +324,8 @@ def find_chislo(user_id):
         return False
 
 
-
+#===================================================================
+# формируем подсказки Да\Нет
 def get_yes_no(user_id):
     session = sessionStorage[user_id]
 
@@ -297,8 +334,9 @@ def get_yes_no(user_id):
         {'title': i, 'hide': True}
         for i in session['yes_no']
     ]
-
     return mas
+
+#=========================================================
 
 # Функция возвращает две подсказки для ответа.
 def get_suggests(user_id, regim):
@@ -320,16 +358,8 @@ def get_suggests(user_id, regim):
 #    session['suggests'] = session['suggests'][1:]
     sessionStorage[user_id] = session
 
-    # Если осталась только одна подсказка, предлагаем подсказку
-    # со ссылкой на Яндекс.Маркет.
-    if len(suggests) < 2:
-        suggests.append({
-            "title": "Ладно",
-            "url": "https://market.yandex.ru/search?text=слон",
-            "hide": True
-        })
-
     return suggests
+
 
 #==================================================================
 # в последнем сообщении  ищем имя Пользователя
@@ -341,6 +371,7 @@ def get_first_name(req):
             # Если есть сущность с ключом 'first_name', то возвращаем ее значение.
             # Во всех остальных случаях возвращаем None.
             return entity['value'].get('first_name', None)
+
 
 #==================================================================
 # Инициируем начало игры
