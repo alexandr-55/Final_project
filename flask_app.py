@@ -40,11 +40,16 @@ def main():
 def handle_dialog(req, res):
     user_id = req['session']['user_id']
 
+
     if req['session']['new']:        # Это новый пользователь.
         # Инициализируем сессию и поприветствуем Пользователя.
 
         Init_start_game(user_id)     # заполним словари начальными данными
         res['response']['text'] = 'Привет! Я - Алиса.  Назови свое имя.'
+        return
+
+    if res['response']['end_session'] or sessiondiap[user_id]['itis'] == -1:
+        res['response']['text'] = 'Игра закончена.  Для продолжения - перезапустите игру'
         return
 
     # если пользователь не новый, то попадаем сюда.
@@ -101,7 +106,11 @@ def handle_dialog(req, res):
         # Пользователь начал отгадывать число
         # проанализируем его вопрос
         st = get_User_question(user_id, req['request']['original_utterance'].lower())
-        if st == 'ok':
+        if 'пока' in st.lower():  # пользователь отказался от игры
+            res['response']['text'] = st
+            res['response']['end_session'] = True
+            sessiondiap[user_id]['itis'] = -1
+        elif st == 'ok':
             # сюда попадаем если вопрос пользователя понятен
             # случайным образом строим ответ Алисы: "на вопрос" или "на твой вопрос"
 
@@ -119,7 +128,7 @@ def handle_dialog(req, res):
         sessiondiap[user_id]['regim'] = 'игра2'
         return
 
-    # сюда попадаем когда начата игра - режим: игра
+    # сюда попадаем когда начата игра - режим: игра (Пользователь задумал число - Алиса отгадывает)
     st = get_otvet(user_id, req['request']['original_utterance'].lower())
     if st == 'да' or st == 'нет':
         change_diap(user_id, st)
@@ -205,11 +214,15 @@ def get_User_question(user_id, sss):
     sp_not = ['не хочу', 'надоело', 'отстань', 'позже', 'в другой раз', 'потом', 'выхо']
     s0 = ''
     sp = [ '<', 'меньше', '>', 'больше', '=', 'равно']
-
     mi = [ -1, -1, -1, -1, -1, -1]
     ni = -1
 
-#    for i in range(sp_not
+    # проверим если Пользователь отказывается от игры
+    for i in sp_not:
+        if i in sss:
+            # Пользователь отказался от игры
+            return('Хорошо.  Поиграем в другой раз...  Пока!')
+
     sessiondiap[user_id]['znak'] = ''
     # убираем из вопроса Пользователя все пробелы и знак ?
     for i in range(len(sss)):
